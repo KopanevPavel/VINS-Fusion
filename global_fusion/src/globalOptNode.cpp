@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 
     global_path = &globalEstimator.global_path;
 
-    ros::Subscriber sub_GPS = n.subscribe("/gps", 100, GPS_callback);
+    ros::Subscriber sub_GPS = n.subscribe("/gps/fix", 100, GPS_callback);
     ros::Subscriber sub_vio = n.subscribe("/vins_estimator/odometry", 100, vio_callback);
     pub_global_path = n.advertise<nav_msgs::Path>("global_path", 100);
     pub_global_odometry = n.advertise<nav_msgs::Odometry>("global_odometry", 100);
