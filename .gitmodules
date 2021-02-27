@@ -1,0 +1,3 @@
+[submodule "tools/SLAM-evaluation-tools"]
+	path = tools/SLAM-evaluation-tools
+	url = https://github.com/KopanevPavel/SLAM-evaluation-tools
