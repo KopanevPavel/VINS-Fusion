@@ -238,7 +238,7 @@ void GlobalOptimization::optimize()
             	}
             }
             updateGlobalPath();
-            //printf("global time %f \n", globalOptimizationTime.toc());
+            printf("global time %f \n", globalOptimizationTime.toc());
             mPoseMap.unlock();
         }
         std::chrono::milliseconds dura(2000);
