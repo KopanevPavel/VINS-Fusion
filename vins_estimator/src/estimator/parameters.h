@@ -32,6 +32,8 @@ extern int ESTIMATE_EXTRINSIC;
 extern double ACC_N, ACC_W;
 extern double GYR_N, GYR_W;
 
+extern double ENCODER_RESOLUTION, WHEEL_DIAMETER_L, WHEEL_DIAMETER_R, WHEEL_BASE;;
+
 extern std::vector<Eigen::Matrix3d> RIC;
 extern std::vector<Eigen::Vector3d> TIC;
 extern Eigen::Vector3d G;
@@ -44,6 +46,7 @@ extern std::string EX_CALIB_RESULT_PATH;
 extern std::string VINS_RESULT_PATH;
 extern std::string OUTPUT_FOLDER;
 extern std::string IMU_TOPIC;
+extern std::string ENCODER_TOPIC;
 extern double TD;
 extern int ESTIMATE_TD;
 extern int ROLLING_SHUTTER;
@@ -51,6 +54,7 @@ extern int ROW, COL;
 extern int NUM_OF_CAM;
 extern int STEREO;
 extern int USE_IMU;
+extern int USE_ENCODER;
 extern int MULTIPLE_THREAD;
 // pts_gt for debug purpose;
 extern map<int, Eigen::Vector3d> pts_gt;

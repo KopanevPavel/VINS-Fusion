@@ -13,6 +13,7 @@ double INIT_DEPTH;
 double MIN_PARALLAX;
 double ACC_N, ACC_W;
 double GYR_N, GYR_W;
+double ENCODER_RESOLUTION, WHEEL_DIAMETER_L, WHEEL_DIAMETER_R, WHEEL_BASE;
 
 std::vector<Eigen::Matrix3d> RIC;
 std::vector<Eigen::Vector3d> TIC;
@@ -30,11 +31,13 @@ std::string EX_CALIB_RESULT_PATH;
 std::string VINS_RESULT_PATH;
 std::string OUTPUT_FOLDER;
 std::string IMU_TOPIC;
+std::string ENCODER_TOPIC;
 int ROW, COL;
 double TD;
 int NUM_OF_CAM;
 int STEREO;
 int USE_IMU;
+int USE_ENCODER;
 int MULTIPLE_THREAD;
 map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
@@ -100,6 +103,18 @@ void readParameters(std::string config_file)
         GYR_N = fsSettings["gyr_n"];
         GYR_W = fsSettings["gyr_w"];
         G.z() = fsSettings["g_norm"];
+    }
+
+    USE_ENCODER = fsSettings["encoder"];
+    printf("USE_ENCODER: %d\n", USE_ENCODER);
+    if(USE_ENCODER)
+    {
+        fsSettings["encoder_topic"] >> ENCODER_TOPIC;
+        printf("ENCODER_TOPIC: %s\n", ENCODER_TOPIC.c_str());
+        ENCODER_RESOLUTION = fsSettings["resolution"];
+        WHEEL_DIAMETER_L = fsSettings["wheel_diameter_l"];
+        WHEEL_DIAMETER_R = fsSettings["wheel_diameter_r"];
+        WHEEL_BASE = fsSettings["wheel_base"];
     }
 
     SOLVER_TIME = fsSettings["max_solver_time"];
