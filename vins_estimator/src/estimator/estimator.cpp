@@ -35,6 +35,10 @@ void Estimator::clearState()
         gyrBuf.pop();
     while(!featureBuf.empty())
         featureBuf.pop();
+    while(!countLBuf.empty())
+        countLBuf.pop();
+    while(!countRBuf.empty())
+        countRBuf.pop();
 
     prevTime = -1;
     curTime = 0;
@@ -221,6 +225,16 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
 
     if(!MULTIPLE_THREAD)
         processMeasurements();
+}
+
+
+void Estimator::inputWheelOdometry(double t, long count_left, long count_right)
+{
+    mBuf.lock();
+    printf("odometry count: %i %i\n", count_left, count_right);
+    countLBuf.push(make_pair(t, count_left));
+    countRBuf.push(make_pair(t, count_right));
+    mBuf.unlock();
 }
 
 
