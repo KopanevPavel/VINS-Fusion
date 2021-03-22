@@ -228,7 +228,7 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
 }
 
 
-void Estimator::inputWheelOdometry(double t, long count_left, long count_right)
+void Estimator::inputEncoder(double t, long count_left, long count_right)
 {
     mBuf.lock();
     printf("odometry count: %i %i\n", count_left, count_right);

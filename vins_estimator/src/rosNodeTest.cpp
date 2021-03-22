@@ -20,6 +20,7 @@
 #include "estimator/estimator.h"
 #include "estimator/parameters.h"
 #include "utility/visualization.h"
+#include <irp_sen_msgs/encoder.h>
 
 Estimator estimator;
 
@@ -147,6 +148,15 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     return;
 }
 
+void encoder_callback(const irp_sen_msgs::encoder &encoder_msg)
+{
+    double t = encoder_msg.header.stamp.toSec();
+    long cntL = encoder_msg.left_count;
+    long cntR = encoder_msg.right_count;
+    estimator.inputEncoder(t, cntL, cntR);
+    return;
+}
+
 
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
@@ -245,7 +255,7 @@ int main(int argc, char **argv)
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
 #endif
 
-    ROS_WARN("waiting for image and imu...");
+    ROS_WARN("waiting for image, imu, encoder...");
 
     registerPub(n);
 
@@ -256,6 +266,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
+    ros::Subscriber sub_encoder = n.subscribe(ENCODER_TOPIC, 100, encoder_callback);
 
     std::thread sync_thread{sync_process};
     ros::spin();
