@@ -1,3 +1,6 @@
 [submodule "tools/SLAM-evaluation-tools"]
 	path = tools/SLAM-evaluation-tools
 	url = https://github.com/KopanevPavel/SLAM-evaluation-tools
+[submodule "irp_sen_msgs"]
+	path = irp_sen_msgs
+	url = https://github.com/irapkaist/irp_sen_msgs
