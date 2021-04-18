@@ -33,6 +33,12 @@ void Estimator::clearState()
         accBuf.pop();
     while(!gyrBuf.empty())
         gyrBuf.pop();
+    while(!odomPositionBuf.empty())
+        odomPositionBuf.pop();
+    while(!odomOrientationBuf.empty())
+        odomOrientationBuf.pop();
+    while(!odomVelocityBuf.empty())
+        odomVelocityBuf.pop();
     while(!featureBuf.empty())
         featureBuf.pop();
     while(!countLBuf.empty())
@@ -231,9 +237,21 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
 void Estimator::inputEncoder(double t, long count_left, long count_right)
 {
     mBuf.lock();
-    printf("odometry count: %i %i\n", count_left, count_right);
+    // printf("odometry count: %i %i\n", count_left, count_right);
     countLBuf.push(make_pair(t, count_left));
     countRBuf.push(make_pair(t, count_right));
+    mBuf.unlock();
+}
+
+
+void Estimator::inputWheelOdom(double t, const Vector3d &position, const Vector3d &orientation, const Vector3d &velocity)
+{
+    mBuf.lock();
+    // printf("odometry position: %f %f %f\n", position[0], position[1], position[2]);
+    // printf("odometry orientation: %f %f %f\n", orientation[0], orientation[1], orientation[2]);
+    odomPositionBuf.push(make_pair(t, position));
+    odomOrientationBuf.push(make_pair(t, orientation));
+    odomVelocityBuf.push(make_pair(t, velocity));
     mBuf.unlock();
 }
 

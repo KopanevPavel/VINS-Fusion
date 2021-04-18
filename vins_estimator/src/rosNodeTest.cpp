@@ -21,6 +21,8 @@
 #include "estimator/parameters.h"
 #include "utility/visualization.h"
 #include <irp_sen_msgs/encoder.h>
+#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/Quaternion.h>
 
 Estimator estimator;
 
@@ -157,6 +159,53 @@ void encoder_callback(const irp_sen_msgs::encoder &encoder_msg)
     return;
 }
 
+void wheel_odom_callback(const nav_msgs::Odometry &wheel_odom_msg)
+{
+    double t = wheel_odom_msg.header.stamp.toSec();
+    //wheel_odom_msg.header.frame_id;
+
+    double x = wheel_odom_msg.pose.pose.position.x;
+    double y = wheel_odom_msg.pose.pose.position.y;
+    double z = wheel_odom_msg.pose.pose.position.z;
+
+    tf::Quaternion q(
+        wheel_odom_msg.pose.pose.orientation.x,
+        wheel_odom_msg.pose.pose.orientation.y,
+        wheel_odom_msg.pose.pose.orientation.z,
+        wheel_odom_msg.pose.pose.orientation.w);
+
+    tf::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    
+    //wheel_odom_msg.pose.covariance[0];
+    //wheel_odom_msg.pose.covariance[7];
+    //wheel_odom_msg.pose.covariance[14];
+    //wheel_odom_msg.pose.covariance[21];
+    //wheel_odom_msg.pose.covariance[28];
+    //wheel_odom_msg.pose.covariance[35];
+
+    //wheel_odom_msg.twist.covariance[0];
+    //wheel_odom_msg.twist.covariance[7];
+    //wheel_odom_msg.twist.covariance[14];
+    //wheel_odom_msg.twist.covariance[21];
+    //wheel_odom_msg.twist.covariance[28];
+    //wheel_odom_msg.twist.covariance[35];
+
+    //wheel_odom_msg.child_frame_id;
+    double tw_x = wheel_odom_msg.twist.twist.linear.x;
+    double tw_y = wheel_odom_msg.twist.twist.linear.y;
+    double tw_z = wheel_odom_msg.twist.twist.angular.z;
+
+    Vector3d position(x, y, z);
+    Vector3d orientation(roll, pitch, yaw);
+    Vector3d velocity(tw_x, tw_y, tw_z);
+
+    estimator.inputWheelOdom(t, position, orientation, velocity);
+
+    return;
+}
+
 
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
@@ -259,6 +308,9 @@ int main(int argc, char **argv)
 
     registerPub(n);
 
+    //printf("IMU topic: %s\n", IMU_TOPIC);
+    //printf("Encoder topic: %s\n", ENCODER_TOPIC);
+
     ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
     ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 100, img0_callback);
@@ -266,7 +318,8 @@ int main(int argc, char **argv)
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
-    ros::Subscriber sub_encoder = n.subscribe(ENCODER_TOPIC, 100, encoder_callback);
+    //ros::Subscriber sub_encoder = n.subscribe(ENCODER_TOPIC, 100, encoder_callback, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_wheel_odom = n.subscribe(WHEEL_ODOM_TOPIC, 100, wheel_odom_callback, ros::TransportHints().tcpNoDelay());
 
     std::thread sync_thread{sync_process};
     ros::spin();

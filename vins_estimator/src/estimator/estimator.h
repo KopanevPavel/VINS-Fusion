@@ -49,6 +49,7 @@ class Estimator
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
     void inputEncoder(double t, long count_left, long count_right);
+    void inputWheelOdom(double t, const Vector3d &position, const Vector3d &orientation, const Vector3d &velocity);
     void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
     void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header);
@@ -100,6 +101,9 @@ class Estimator
     queue<pair<double, Eigen::Vector3d>> gyrBuf;
     queue<pair<double, long>> countLBuf;
     queue<pair<double, long>> countRBuf;
+    queue<pair<double, Eigen::Vector3d>> odomPositionBuf;
+    queue<pair<double, Eigen::Vector3d>> odomOrientationBuf;
+    queue<pair<double, Eigen::Vector3d>> odomVelocityBuf;
     queue<pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > > featureBuf;
     double prevTime, curTime;
     bool openExEstimation;

@@ -32,6 +32,7 @@ std::string VINS_RESULT_PATH;
 std::string OUTPUT_FOLDER;
 std::string IMU_TOPIC;
 std::string ENCODER_TOPIC;
+std::string WHEEL_ODOM_TOPIC;
 int ROW, COL;
 double TD;
 int NUM_OF_CAM;
@@ -110,7 +111,9 @@ void readParameters(std::string config_file)
     if(USE_ENCODER)
     {
         fsSettings["encoder_topic"] >> ENCODER_TOPIC;
+        fsSettings["wheel_odom_topic"] >> WHEEL_ODOM_TOPIC;
         printf("ENCODER_TOPIC: %s\n", ENCODER_TOPIC.c_str());
+        printf("WHEEL_ODOM_TOPIC: %s\n", WHEEL_ODOM_TOPIC.c_str());
         ENCODER_RESOLUTION = fsSettings["resolution"];
         WHEEL_DIAMETER_L = fsSettings["wheel_diameter_l"];
         WHEEL_DIAMETER_R = fsSettings["wheel_diameter_r"];

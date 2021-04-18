@@ -4,13 +4,13 @@
 imu: 0      
 num_of_cam: 2
 
-imu_topic: "/imu/data_raww"
-image0_topic: "/stereo/left/image_rect"
-image1_topic: "/stereo/right/image_rect"
+imu_topic: "/imu/data_raw"
+image0_topic: "/stereo/left/image_raw"
+image1_topic: "/stereo/right/image_raw"
 output_path: "/home/tong/output/"
 
-cam0_calib: "cam0_rect.yaml"
-cam1_calib: "cam1_rect.yaml"
+cam0_calib: "cam0_v3.yaml"
+cam1_calib: "cam1_v3.yaml"
 image_width: 1280
 image_height: 560
    
