@@ -460,6 +460,7 @@ int main(int argc, char **argv)
     fout.close();
 
     int USE_IMU = fsSettings["imu"];
+    int USE_ENCODER = fsSettings["encoder"];
     posegraph.setIMUFlag(USE_IMU);
     fsSettings.release();
 

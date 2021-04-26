@@ -16,10 +16,12 @@
 #include <ceres/ceres.h>
 #include <unordered_map>
 #include <queue>
+#include <tuple>
 #include <opencv2/core/eigen.hpp>
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Geometry>
 
+#include "mlinterp.h"
 #include "parameters.h"
 #include "feature_manager.h"
 #include "../utility/utility.h"
@@ -36,6 +38,7 @@
 #include "../factor/projectionOneFrameTwoCamFactor.h"
 #include "../featureTracker/feature_tracker.h"
 
+#define USE_INTERPOLATION = true
 
 class Estimator
 {
@@ -52,6 +55,7 @@ class Estimator
     void inputWheelOdom(double t, const Vector3d &position, const Vector3d &orientation, const Vector3d &velocity);
     void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
+    bool processEncoder(double t, int &prev_id, Eigen::Vector3d &prevPosition, vector<pair<double, Eigen::Vector3d>> &odomPositionVector, Eigen::Vector3d &odomPositionDelta);
     void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header);
     void processMeasurements();
     void changeSensorType(int use_imu, int use_stereo);
@@ -70,6 +74,7 @@ class Estimator
     bool failureDetection();
     bool getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
                                               vector<pair<double, Eigen::Vector3d>> &gyrVector);
+    bool getEncoderInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &odomPositionVector);
     void getPoseInWorldFrame(Eigen::Matrix4d &T);
     void getPoseInWorldFrame(int index, Eigen::Matrix4d &T);
     void predictPtsInNextFrame();
@@ -80,6 +85,7 @@ class Estimator
     void updateLatestStates();
     void fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Eigen::Vector3d angular_velocity);
     bool IMUAvailable(double t);
+    bool EncoderAvailable(double t);
     void initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector);
 
     enum SolverFlag

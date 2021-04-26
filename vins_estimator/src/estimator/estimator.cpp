@@ -291,6 +291,36 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
     return true;
 }
 
+bool Estimator::getEncoderInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &odomPositionVector)
+{
+    if(odomPositionBuf.empty())
+    {
+        printf("not receive wheel odometry\n");
+        return false;
+    }
+    //printf("get imu from %f %f\n", t0, t1);
+    //printf("imu fornt time %f   imu end time %f\n", accBuf.front().first, accBuf.back().first);
+    if(t1 <= odomPositionBuf.back().first)
+    {
+        while (odomPositionBuf.front().first <= t0)
+        {
+            odomPositionBuf.pop();
+        }
+        while (odomPositionBuf.front().first < t1)
+        {
+            odomPositionVector.push_back(odomPositionBuf.front());
+            odomPositionBuf.pop();
+        }
+        odomPositionVector.push_back(odomPositionBuf.front());
+    }
+    else
+    {
+        printf("wait for wheel odometry\n");
+        return false;
+    }
+    return true;
+}
+
 bool Estimator::IMUAvailable(double t)
 {
     if(!accBuf.empty() && t <= accBuf.back().first)
@@ -299,6 +329,48 @@ bool Estimator::IMUAvailable(double t)
         return false;
 }
 
+bool Estimator::EncoderAvailable(double t)
+{
+    if(!odomPositionBuf.empty() && t <= odomPositionBuf.back().first)
+        return true;
+    else
+        return false;
+}
+
+bool Estimator::processEncoder(double t, int &prev_id, Eigen::Vector3d &prevPosition, vector<pair<double, Eigen::Vector3d>> &odomPositionVector, Eigen::Vector3d &odomPositionDelta)
+{
+    if (prev_id == -1) {
+        if (t >= odomPositionVector[0].first) {
+            prev_id = 1;
+            prevPosition = odomPositionVector[0].second;
+            while (t >= odomPositionVector[prev_id].first) {
+                prev_id += 1;
+            }
+            prev_id -= 1;
+            Eigen::Vector3d currPosition = odomPositionVector[prev_id].second;
+            odomPositionDelta = currPosition - prevPosition;
+            prevPosition = currPosition;
+            return true;
+        }
+        else return false;
+    }
+    else {
+        if (t >= odomPositionVector[prev_id].first) {
+            prev_id ++;
+            while (t >= odomPositionVector[prev_id].first) {
+                prev_id += 1;
+            }
+            prev_id -= 1;
+            Eigen::Vector3d currPosition = odomPositionVector[prev_id].second;
+            odomPositionDelta = currPosition - prevPosition;
+            prevPosition = currPosition;
+            return true;
+        }
+        else return false;
+    }
+}
+
+
 void Estimator::processMeasurements()
 {
     while (1)
@@ -306,6 +378,9 @@ void Estimator::processMeasurements()
         //printf("process measurments\n");
         pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;
         vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
+        vector<pair<double, Eigen::Vector3d>> odomPositionVector;
+        Eigen::Vector3d odomPositionDelta, prevPosition;
+        int prev_id = -1;
         if(!featureBuf.empty())
         {
             feature = featureBuf.front();
@@ -326,11 +401,13 @@ void Estimator::processMeasurements()
             mBuf.lock();
             if(USE_IMU)
                 getIMUInterval(prevTime, curTime, accVector, gyrVector);
+            if(USE_ENCODER)
+                getEncoderInterval(prevTime, curTime, odomPositionVector);
 
             featureBuf.pop();
             mBuf.unlock();
 
-            if(USE_IMU)
+            if(USE_IMU && USE_ENCODER)
             {
                 if(!initFirstPoseFlag)
                     initFirstIMUPose(accVector);
@@ -343,6 +420,28 @@ void Estimator::processMeasurements()
                         dt = curTime - accVector[i - 1].first;
                     else
                         dt = accVector[i].first - accVector[i - 1].first;
+
+                    processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
+                    if (!odomPositionVector.empty()) 
+                        if (processEncoder(accVector[i].first, prev_id, prevPosition, odomPositionVector, odomPositionDelta)) {
+                            std::cout << "Encoder deltas: " << odomPositionDelta[0] << "; " << odomPositionDelta[1] << "; " << odomPositionDelta[2] << std::endl;
+                        }
+                }
+            }
+            else if(USE_IMU)
+            {
+                if(!initFirstPoseFlag)
+                    initFirstIMUPose(accVector);
+                for(size_t i = 0; i < accVector.size(); i++)
+                {
+                    double dt;
+                    if(i == 0)
+                        dt = accVector[i].first - prevTime;
+                    else if (i == accVector.size() - 1)
+                        dt = curTime - accVector[i - 1].first;
+                    else
+                        dt = accVector[i].first - accVector[i - 1].first;
+
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
                 }
             }
@@ -427,7 +526,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
 
-        int j = frame_count;         
+        int j = frame_count;        
         Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
         Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
         Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();
@@ -947,7 +1046,7 @@ void Estimator::double2vector()
                 Bgs[i] = Vector3d(para_SpeedBias[i][6],
                                   para_SpeedBias[i][7],
                                   para_SpeedBias[i][8]);
-            
+        
         }
     }
     else
