@@ -177,6 +177,12 @@ void wheel_odom_callback(const nav_msgs::Odometry &wheel_odom_msg)
     tf::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
+
+
+    double q_x = wheel_odom_msg.pose.pose.orientation.x;
+    double q_y = wheel_odom_msg.pose.pose.orientation.y;
+    double q_z = wheel_odom_msg.pose.pose.orientation.z;
+    double q_w = wheel_odom_msg.pose.pose.orientation.w;
     
     //wheel_odom_msg.pose.covariance[0];
     //wheel_odom_msg.pose.covariance[7];
@@ -198,7 +204,8 @@ void wheel_odom_callback(const nav_msgs::Odometry &wheel_odom_msg)
     double tw_z = wheel_odom_msg.twist.twist.angular.z;
 
     Vector3d position(x, y, z);
-    Vector3d orientation(roll, pitch, yaw);
+    // Vector3d orientation(roll, pitch, yaw);
+    Quaterniond orientation(q_x, q_y, q_z, q_w);
     Vector3d velocity(tw_x, tw_y, tw_z);
 
     estimator.inputWheelOdom(t, position, orientation, velocity);
@@ -318,6 +325,9 @@ int main(int argc, char **argv)
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
+
+    //ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
+    //ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
     //ros::Subscriber sub_encoder = n.subscribe(ENCODER_TOPIC, 100, encoder_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_wheel_odom = n.subscribe(WHEEL_ODOM_TOPIC, 100, wheel_odom_callback, ros::TransportHints().tcpNoDelay());
 

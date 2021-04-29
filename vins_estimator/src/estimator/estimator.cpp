@@ -244,7 +244,7 @@ void Estimator::inputEncoder(double t, long count_left, long count_right)
 }
 
 
-void Estimator::inputWheelOdom(double t, const Vector3d &position, const Vector3d &orientation, const Vector3d &velocity)
+void Estimator::inputWheelOdom(double t, const Vector3d &position, const Quaterniond &orientation, const Vector3d &velocity)
 {
     mBuf.lock();
     // printf("odometry position: %f %f %f\n", position[0], position[1], position[2]);
@@ -291,7 +291,7 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
     return true;
 }
 
-bool Estimator::getEncoderInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &odomPositionVector)
+bool Estimator::getEncoderInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &odomPositionVector, vector<pair<double, Eigen::Quaterniond>> &odomOrientationVector)
 {
     if(odomPositionBuf.empty())
     {
@@ -305,13 +305,17 @@ bool Estimator::getEncoderInterval(double t0, double t1, vector<pair<double, Eig
         while (odomPositionBuf.front().first <= t0)
         {
             odomPositionBuf.pop();
+            odomOrientationBuf.pop();
         }
         while (odomPositionBuf.front().first < t1)
         {
             odomPositionVector.push_back(odomPositionBuf.front());
             odomPositionBuf.pop();
+            odomOrientationVector.push_back(odomOrientationBuf.front());
+            odomOrientationBuf.pop();
         }
         odomPositionVector.push_back(odomPositionBuf.front());
+        odomOrientationVector.push_back(odomOrientationBuf.front());
     }
     else
     {
@@ -339,7 +343,7 @@ bool Estimator::EncoderAvailable(double t)
 
 bool Estimator::processEncoder(double t, int &prev_id, Eigen::Vector3d &prevPosition, vector<pair<double, Eigen::Vector3d>> &odomPositionVector, Eigen::Vector3d &odomPositionDelta)
 {
-    if (prev_id == -1) {
+    if ((prev_id == -1) && (encoderMemory.size() == 0)) {
         if (t >= odomPositionVector[0].first) {
             prev_id = 1;
             prevPosition = odomPositionVector[0].second;
@@ -353,6 +357,21 @@ bool Estimator::processEncoder(double t, int &prev_id, Eigen::Vector3d &prevPosi
             return true;
         }
         else return false;
+    }
+    else if ((prev_id == -1) && (encoderMemory.size() != 0)) {
+        prevPosition = encoderMemory;
+        if (t >= odomPositionVector[0].first) {
+            prev_id = 1;
+            // prevPosition = odomPositionVector[0].second;
+            while (t >= odomPositionVector[prev_id].first) {
+                prev_id += 1;
+            }
+            prev_id -= 1;
+            Eigen::Vector3d currPosition = odomPositionVector[prev_id].second;
+            odomPositionDelta = currPosition - prevPosition;
+            prevPosition = currPosition;
+            return true;
+        }
     }
     else {
         if (t >= odomPositionVector[prev_id].first) {
@@ -379,6 +398,7 @@ void Estimator::processMeasurements()
         pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > feature;
         vector<pair<double, Eigen::Vector3d>> accVector, gyrVector;
         vector<pair<double, Eigen::Vector3d>> odomPositionVector;
+        vector<pair<double, Eigen::Quaterniond>> odomOrientationVector;
         Eigen::Vector3d odomPositionDelta, prevPosition;
         int prev_id = -1;
         if(!featureBuf.empty())
@@ -402,7 +422,24 @@ void Estimator::processMeasurements()
             if(USE_IMU)
                 getIMUInterval(prevTime, curTime, accVector, gyrVector);
             if(USE_ENCODER)
-                getEncoderInterval(prevTime, curTime, odomPositionVector);
+                getEncoderInterval(prevTime, curTime, odomPositionVector, odomOrientationVector);
+
+                odomPositionijCurr = (odomPositionVector[odomPositionVector.size() - 1].second - odom2imu) - (odomPositionVector[0].second - odom2imu);
+
+                odomOrientationi = odomOrientationVector[0].second;
+                odomOrientationi.x() = -odomOrientationi.x();
+                odomOrientationi.y() = -odomOrientationi.y();
+                odomOrientationi.z() = -odomOrientationi.z();
+                odomOrientationi.w() = odomOrientationi.w();
+
+                odomOrientationj = odomOrientationVector[odomOrientationVector.size() - 1].second;
+
+                odomOrientationijCurr = odomOrientationi * odomOrientationj;
+
+                // ceres::QuaternionProduct(odomOrientationi, odomOrientationj, odomOrientationijCurr);
+
+                odomPositionij.push_back(odomPositionijCurr);
+                odomOrientationij.push_back(odomOrientationijCurr);
 
             featureBuf.pop();
             mBuf.unlock();
@@ -422,10 +459,10 @@ void Estimator::processMeasurements()
                         dt = accVector[i].first - accVector[i - 1].first;
 
                     processIMU(accVector[i].first, dt, accVector[i].second, gyrVector[i].second);
-                    if (!odomPositionVector.empty()) 
-                        if (processEncoder(accVector[i].first, prev_id, prevPosition, odomPositionVector, odomPositionDelta)) {
-                            std::cout << "Encoder deltas: " << odomPositionDelta[0] << "; " << odomPositionDelta[1] << "; " << odomPositionDelta[2] << std::endl;
-                        }
+                    // if (!odomPositionVector.empty()) 
+                        // if (processEncoder(accVector[i].first, prev_id, prevPosition, odomPositionVector, odomPositionDelta)) {
+                            // std::cout << "Encoder deltas: " << odomPositionDelta[0] << "; " << odomPositionDelta[1] << "; " << odomPositionDelta[2] << std::endl;
+                        // }
                 }
             }
             else if(USE_IMU)
@@ -448,6 +485,11 @@ void Estimator::processMeasurements()
             mProcess.lock();
             processImage(feature.second, feature.first);
             prevTime = curTime;
+            // odomPositionij.pop();
+            // odomOrientationij.pop();
+
+            odomPositionij.erase(odomPositionij.begin());
+            odomOrientationij.erase(odomOrientationij.begin());
 
             printStatistics(*this, 0);
 
@@ -463,6 +505,8 @@ void Estimator::processMeasurements()
             pubTF(*this, header);
             mProcess.unlock();
         }
+
+        encoderMemory = prevPosition;
 
         if (! MULTIPLE_THREAD)
             break;
@@ -1189,6 +1233,17 @@ void Estimator::optimization()
                 continue;
             IMUFactor* imu_factor = new IMUFactor(pre_integrations[j]);
             problem.AddResidualBlock(imu_factor, NULL, para_Pose[i], para_SpeedBias[i], para_Pose[j], para_SpeedBias[j]);
+        }
+    }
+    if(USE_ENCODER)
+    {
+        for (int i = 0; i < frame_count; i++)
+        {
+            int j = i + 1;
+            ceres::CostFunction* encoder_factor = RelativeRTError::Create(odomPositionij[i][0], odomPositionij[i][1], odomPositionij[i][2],
+                                                                            odomOrientationij[i].w(), odomOrientationij[i].x(), odomOrientationij[i].y(), odomOrientationij[i].z(),
+                                                                            1, 0.1);  // observed
+            problem.AddResidualBlock(encoder_factor, NULL, para_Pose[i], para_Pose[j]);  // predicted
         }
     }
 

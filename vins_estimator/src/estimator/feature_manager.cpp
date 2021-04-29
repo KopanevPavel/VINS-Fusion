@@ -258,6 +258,7 @@ bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
 
 void FeatureManager::initFramePoseByPnP(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[])
 {
+    // std::cout << "initFramePoseByPnP called!!" << std::endl;
 
     if(frameCnt > 0)
     {

@@ -31,6 +31,7 @@
 #include "../initial/initial_alignment.h"
 #include "../initial/initial_ex_rotation.h"
 #include "../factor/imu_factor.h"
+#include "../factor/encoder_factor.h"
 #include "../factor/pose_local_parameterization.h"
 #include "../factor/marginalization_factor.h"
 #include "../factor/projectionTwoFrameOneCamFactor.h"
@@ -52,13 +53,15 @@ class Estimator
     void inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity);
     void inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame);
     void inputEncoder(double t, long count_left, long count_right);
-    void inputWheelOdom(double t, const Vector3d &position, const Vector3d &orientation, const Vector3d &velocity);
+    void inputWheelOdom(double t, const Vector3d &position, const Quaterniond &orientation, const Vector3d &velocity);
     void inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
     bool processEncoder(double t, int &prev_id, Eigen::Vector3d &prevPosition, vector<pair<double, Eigen::Vector3d>> &odomPositionVector, Eigen::Vector3d &odomPositionDelta);
     void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header);
     void processMeasurements();
     void changeSensorType(int use_imu, int use_stereo);
+
+    Eigen::Vector3d encoderMemory;
 
     // internal
     void clearState();
@@ -74,7 +77,7 @@ class Estimator
     bool failureDetection();
     bool getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
                                               vector<pair<double, Eigen::Vector3d>> &gyrVector);
-    bool getEncoderInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &odomPositionVector);
+    bool getEncoderInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &odomPositionVector, vector<pair<double, Eigen::Quaterniond>> &odomOrientationVector);
     void getPoseInWorldFrame(Eigen::Matrix4d &T);
     void getPoseInWorldFrame(int index, Eigen::Matrix4d &T);
     void predictPtsInNextFrame();
@@ -87,6 +90,14 @@ class Estimator
     bool IMUAvailable(double t);
     bool EncoderAvailable(double t);
     void initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector);
+
+    vector<Eigen::Quaterniond> odomOrientationij;
+    vector<Eigen::Vector3d> odomPositionij;
+    Eigen::Vector3d odom2imu{Eigen::Vector3d(-0.07, 0, 1.7)};
+    Eigen::Vector3d odomPositionijCurr;
+    Eigen::Quaterniond odomOrientationi;
+    Eigen::Quaterniond odomOrientationj;
+    Eigen::Quaterniond odomOrientationijCurr;
 
     enum SolverFlag
     {
@@ -108,7 +119,7 @@ class Estimator
     queue<pair<double, long>> countLBuf;
     queue<pair<double, long>> countRBuf;
     queue<pair<double, Eigen::Vector3d>> odomPositionBuf;
-    queue<pair<double, Eigen::Vector3d>> odomOrientationBuf;
+    queue<pair<double, Eigen::Quaterniond>> odomOrientationBuf;
     queue<pair<double, Eigen::Vector3d>> odomVelocityBuf;
     queue<pair<double, map<int, vector<pair<int, Eigen::Matrix<double, 7, 1> > > > > > featureBuf;
     double prevTime, curTime;
@@ -127,11 +138,14 @@ class Estimator
     Vector3d tic[2];
 
     Vector3d        Ps[(WINDOW_SIZE + 1)];
+    // Vector3d        Ps_odom[(WINDOW_SIZE + 1)];
     Vector3d        Vs[(WINDOW_SIZE + 1)];
     Matrix3d        Rs[(WINDOW_SIZE + 1)];
     Vector3d        Bas[(WINDOW_SIZE + 1)];
     Vector3d        Bgs[(WINDOW_SIZE + 1)];
     double td;
+
+    // int prev_id = -1;
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
