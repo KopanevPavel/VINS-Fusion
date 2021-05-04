@@ -441,6 +441,8 @@ void Estimator::processMeasurements()
                 odomPositionij.push_back(odomPositionijCurr);
                 odomOrientationij.push_back(odomOrientationijCurr);
 
+                std::cout << "Odometry position: " << odomPositionijCurr[0] << ", " << odomPositionijCurr[1] << ", " <<  odomPositionijCurr[2] << std::endl;
+
             featureBuf.pop();
             mBuf.unlock();
 
@@ -1242,7 +1244,7 @@ void Estimator::optimization()
             int j = i + 1;
             ceres::CostFunction* encoder_factor = RelativeRTError::Create(odomPositionij[i][0], odomPositionij[i][1], odomPositionij[i][2],
                                                                             odomOrientationij[i].w(), odomOrientationij[i].x(), odomOrientationij[i].y(), odomOrientationij[i].z(),
-                                                                            1, 0.1);  // observed
+                                                                            5, 1000);  // observed
             problem.AddResidualBlock(encoder_factor, NULL, para_Pose[i], para_Pose[j]);  // predicted
         }
     }

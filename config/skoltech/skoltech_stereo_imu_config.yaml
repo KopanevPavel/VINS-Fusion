@@ -2,12 +2,14 @@
 
 #common parameters
 #support: 1 imu 1 cam; 1 imu 2 cam: 2 cam; 
-imu: 1         
+imu: 1 
+encoder: 0      
 num_of_cam: 2  
 
 imu_topic: "/t265_1/t265_1/imu"
 image0_topic: "/t265_1/t265_1/fisheye1/image_raw"
 image1_topic: "/t265_1/t265_1/fisheye2/image_raw"
+wheel_odom_topic: "/odom"
 output_path: "/home/tong/output/"
 
 cam0_calib: "left_cam.yaml"
@@ -17,7 +19,7 @@ image_height: 800
    
 
 # Extrinsic parameter between IMU and Camera.
-estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
                         # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
 
 body_T_cam0: !!opencv-matrix
@@ -47,7 +49,7 @@ max_cnt: 150            # max feature number in feature tracking
 min_dist: 30            # min distance between two features 
 freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
 F_threshold: 1.0        # ransac threshold (pixel)
-show_track: 0           # publish tracking image as topic
+show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
 
 #optimization parameters
@@ -69,4 +71,11 @@ td: 0.004
 #loop closure parameters
 load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
 pose_graph_save_path: "/home/tony-ws1/output/pose_graph/" # save and load path
-save_image: 1                   # save image in pose graph for visualization prupose; you can close this function by setting 0 
+save_image: 1                   # save image in pose graph for visualization prupose; you can close this function by setting 0
+
+#encoder parameters
+resolution: 4096
+wheel_diameter_l: 0.623479
+wheel_diameter_r: 0.622806
+wheel_base: 1.52439
+

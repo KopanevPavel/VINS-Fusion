@@ -5,7 +5,7 @@
 imu: 1         
 num_of_cam: 1 
 
-imu_topic: "/imu"
+imu_topic: "/t265_1/t265_1/imu"
 image0_topic: "/t265_1/t265_1/fisheye1/image_raw"
 image1_topic: "/t265_1/t265_1/fisheye2/image_raw"
 output_path: "/home/tong/output/"
