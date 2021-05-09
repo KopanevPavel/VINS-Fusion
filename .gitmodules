@@ -4,3 +4,6 @@
 [submodule "irp_sen_msgs"]
 	path = irp_sen_msgs
 	url = https://github.com/irapkaist/irp_sen_msgs
+[submodule "dnn_fusion/ThirdParty/json"]
+	path = dnn_fusion/ThirdParty/json
+	url = https://github.com/nlohmann/json.git

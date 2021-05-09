@@ -2,7 +2,7 @@
 
 #common parameters
 imu: 1     
-encoder: 0    
+encoder: 1    
 num_of_cam: 2  
 
 imu_topic: "/imu/data_raw"
