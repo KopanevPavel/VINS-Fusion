@@ -1,6 +1,6 @@
 #include "ros/ros.h"
 #include <opencv2/opencv.hpp>
-//#include "dnnOpt.h"
+#include "dnnOpt.h"
 #include <sensor_msgs/NavSatFix.h>
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
@@ -8,6 +8,7 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Geometry>
 #include <iostream>
+#include <tuple>
 #include <stdio.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -18,11 +19,12 @@
 
 using json = nlohmann::json;
 
-//DnnOptimization dnnEstimator;
+DnnOptimization dnnEstimator;
 ros::Publisher pub_dnn_odometry, pub_dnn_path;
 nav_msgs::Path *dnn_path;
 double last_vio_t = -1;
-//std::queue<std::pair<std_msgs::String>> dnnQueue;
+std::queue<std::tuple<double, double, Eigen::Vector3d, Eigen::Quaterniond>> dnnQueue;
+std::queue<std::tuple<double, Eigen::Vector3d, Eigen::Quaterniond>> odomQueue;
 std::mutex m_buf;
 
 
@@ -37,8 +39,9 @@ void dnn_callback(const std_msgs::String &dnn_msg)
     
     std::vector<std::vector<double>> cur_keypoints_coords = j[0].get<std::vector<std::vector<double>>>();
     std::vector<std::vector<double>> prev_keypoints_coords = j[1].get<std::vector<std::vector<double>>>(); 
-    std::vector<double> scores = j[2].get<std::vector<double>>(); 
-    double timestamp = std::stod(j[3].get<std::string>()); 
+    std::vector<double> scores = j[2].get<std::vector<double>>();
+    double timestamp_prev = std::stod(j[3].get<std::string>()); 
+    double timestamp = std::stod(j[4].get<std::string>()); 
 
     std::vector<cv::Point2f> cur_keypoints_coords_vec;
     std::vector<cv::Point2f> prev_keypoints_coords_vec;
@@ -79,23 +82,22 @@ void dnn_callback(const std_msgs::String &dnn_msg)
     } 
     */  
 
-    Eigen::Matrix3f mat_R;
+    Eigen::Matrix3d mat_R;
 
     mat_R << R.at<double>(0, 0), R.at<double>(0, 1), R.at<double>(0, 2),
              R.at<double>(1, 0), R.at<double>(1, 1), R.at<double>(1, 2),
              R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2);
 
-    Eigen::Quaternionf dnn_q(mat_R);
+    Eigen::Quaterniond dnn_q(mat_R);
+
+    dnnQueue.push(std::make_tuple(timestamp_prev, timestamp, dnn_t, dnn_q));
 
     // std::cout << dnn_t[0] << dnn_t[1] << dnn_t[2] << std::endl;
-
-    // gpsQueue.push(GPS_msg);
     m_buf.unlock();
 }
 
 void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 {
-    //printf("vio_callback! \n");
     double t = pose_msg->header.stamp.toSec();
     // std::cout << std::fixed << t << std::endl;
     last_vio_t = t;
@@ -105,36 +107,32 @@ void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     vio_q.x() = pose_msg->pose.pose.orientation.x;
     vio_q.y() = pose_msg->pose.pose.orientation.y;
     vio_q.z() = pose_msg->pose.pose.orientation.z;
-    /*
+
+    odomQueue.push(std::make_tuple(t, vio_t, vio_q));
     dnnEstimator.inputOdom(t, vio_t, vio_q);
 
-
     m_buf.lock();
-    while(!gpsQueue.empty())
+    while(!dnnQueue.empty())
     {
-        sensor_msgs::NavSatFixConstPtr GPS_msg = gpsQueue.front();
-        double gps_t = GPS_msg->header.stamp.toSec();
-        printf("vio t: %f, gps t: %f \n", t, gps_t);
+        double dnn_time = std::get<1>(dnnQueue.front()); // Oldest element
+        double dnn_prev_time = std::get<0>(dnnQueue.front());
+        Eigen::Vector3d dnn_t = std::get<2>(dnnQueue.front());
+        Eigen::Quaterniond dnn_q = std::get<3>(dnnQueue.front());
+
+        t = std::get<0>(odomQueue.front());
+
         // 10ms sync tolerance
-        if(gps_t >= t - 0.1 && gps_t <= t + 0.1)
+        if(dnn_time >= t - 0.05 && dnn_time <= t + 0.05)
         {
-            printf("receive GPS with timestamp %f\n", GPS_msg->header.stamp.toSec());
-            double latitude = GPS_msg->latitude;
-            double longitude = GPS_msg->longitude;
-            double altitude = GPS_msg->altitude;
-            //int numSats = GPS_msg->status.service;
-            double pos_accuracy = GPS_msg->position_covariance[0];
-            if(pos_accuracy <= 0)
-                pos_accuracy = 1;
-            //printf("receive covariance %lf \n", pos_accuracy);
-            //if(GPS_msg->status.status > 8)
-                globalEstimator.inputGPS(t, latitude, longitude, altitude, pos_accuracy);
-            gpsQueue.pop();
+            printf("receive DNN!");
+            dnnEstimator.inputDnn(t, dnn_t, dnn_q);
+            dnnQueue.pop();
             break;
         }
-        else if(gps_t < t - 0.01)
-            gpsQueue.pop();
-        else if(gps_t > t + 0.01)
+        else if(dnn_time > t + 0.05)
+            odomQueue.pop(); // Remove oldest
+        else if(dnn_time < t - 0.05)
+            dnnQueue.pop();
             break;
     }
     m_buf.unlock();
@@ -156,8 +154,6 @@ void vio_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     odometry.pose.pose.orientation.w = dnn_q.w();
     pub_dnn_odometry.publish(odometry);
     pub_dnn_path.publish(*dnn_path);
-
-    */
 }
 
 int main(int argc, char **argv)

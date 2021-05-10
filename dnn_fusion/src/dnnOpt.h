@@ -9,37 +9,35 @@
 #include <ceres/ceres.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
-#include "LocalCartesian.hpp"
 #include "tic_toc.h"
 
 using namespace std;
 
-class GlobalOptimization
+class DnnOptimization
 {
 public:
-	GlobalOptimization();
-	~GlobalOptimization();
-	void inputDNN(double t, double latitude, double longitude, double altitude, double posAccuracy);
+	DnnOptimization();
+	~DnnOptimization();
+	void inputDnn(double t, Eigen::Vector3d DnnP, Eigen::Quaterniond DnnQ);
 	void inputOdom(double t, Eigen::Vector3d OdomP, Eigen::Quaterniond OdomQ);
-	void getGlobalOdom(Eigen::Vector3d &odomP, Eigen::Quaterniond &odomQ);
-	nav_msgs::Path global_path;
+	void getDnnOdom(Eigen::Vector3d &odomP, Eigen::Quaterniond &odomQ);
+	nav_msgs::Path dnn_path;
 
 private:
-	// void GPS2XYZ(double latitude, double longitude, double altitude, double* xyz);
 	void optimize();
-	void updateGlobalPath();
+	void updateDnnPath();
 
 	// format t, tx,ty,tz,qw,qx,qy,qz
 	map<double, vector<double>> localPoseMap;
-	map<double, vector<double>> globalPoseMap;
-	map<double, vector<double>> DNNPositionMap;
-	bool initDNN;
-	bool newDNN;
-	GeographicLib::LocalCartesian geoConverter;
+	map<double, vector<double>> dnnPoseMap;
+	map<double, vector<double>> dnnPositionMap;
+	bool initDnn;
+	bool newDnn;
 	std::mutex mPoseMap;
 	Eigen::Matrix4d WDNN_T_WVIO;
 	Eigen::Vector3d lastP;
 	Eigen::Quaterniond lastQ;
 	std::thread threadOpt;
-
+	bool first_pair = true;
+	double first_t;
 };

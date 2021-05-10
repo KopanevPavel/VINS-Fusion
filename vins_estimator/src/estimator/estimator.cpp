@@ -424,6 +424,7 @@ void Estimator::processMeasurements()
             if(USE_ENCODER)
                 getEncoderInterval(prevTime, curTime, odomPositionVector, odomOrientationVector);
 
+                /*
                 odomPositionijCurr = (odomPositionVector[odomPositionVector.size() - 1].second - odom2imu) - (odomPositionVector[0].second - odom2imu);
 
                 odomOrientationi = odomOrientationVector[0].second;
@@ -436,10 +437,28 @@ void Estimator::processMeasurements()
 
                 odomOrientationijCurr = odomOrientationi * odomOrientationj;
 
-                // ceres::QuaternionProduct(odomOrientationi, odomOrientationj, odomOrientationijCurr);
-
                 odomPositionij.push_back(odomPositionijCurr);
                 odomOrientationij.push_back(odomOrientationijCurr);
+                */
+
+                // ceres::QuaternionProduct(odomOrientationi, odomOrientationj, odomOrientationijCurr);
+
+
+                Eigen::Matrix4d wTi = Eigen::Matrix4d::Identity();
+                Eigen::Matrix4d wTj = Eigen::Matrix4d::Identity();
+                wTi.block<3, 3>(0, 0) = Eigen::Quaterniond(odomOrientationVector[0].second.x(), odomOrientationVector[0].second.y(), 
+                                                            odomOrientationVector[0].second.z(), odomOrientationVector[0].second.w()).toRotationMatrix();
+                wTi.block<3, 1>(0, 3) = Eigen::Vector3d(odomPositionVector[0].second[0], odomPositionVector[0].second[1], odomPositionVector[0].second[2]);
+                wTj.block<3, 3>(0, 0) = Eigen::Quaterniond(odomOrientationVector[odomOrientationVector.size() - 1].second.x(), odomOrientationVector[odomOrientationVector.size() - 1].second.y(), 
+                                                            odomOrientationVector[odomOrientationVector.size() - 1].second.z(), odomOrientationVector[odomOrientationVector.size() - 1].second.w()).toRotationMatrix();
+                wTj.block<3, 1>(0, 3) = Eigen::Vector3d(odomPositionVector[odomPositionVector.size() - 1].second[0], odomPositionVector[odomPositionVector.size() - 1].second[1], odomPositionVector[odomPositionVector.size() - 1].second[2]);
+                Eigen::Matrix4d iTj = wTi.inverse() * wTj;
+                Eigen::Quaterniond iQj;
+                iQj = iTj.block<3, 3>(0, 0);
+                Eigen::Vector3d iPj = iTj.block<3, 1>(0, 3);
+
+                odomPositionij.push_back(iPj);
+                odomOrientationij.push_back(iQj);
 
                 std::cout << "Odometry position: " << odomPositionijCurr[0] << ", " << odomPositionijCurr[1] << ", " <<  odomPositionijCurr[2] << std::endl;
 

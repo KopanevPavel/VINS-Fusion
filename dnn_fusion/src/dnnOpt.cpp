@@ -1,32 +1,20 @@
 #include "dnnOpt.h"
 #include "Factors.h"
 
-GlobalOptimization::GlobalOptimization()
+DnnOptimization::DnnOptimization()
 {
-	initGPS = false;
-    newGPS = false;
-	WGPS_T_WVIO = Eigen::Matrix4d::Identity();
-    threadOpt = std::thread(&GlobalOptimization::optimize, this);
+	initDnn = false;
+    newDnn = false;
+	WDNN_T_WVIO = Eigen::Matrix4d::Identity();
+    threadOpt = std::thread(&DnnOptimization::optimize, this);
 }
 
-GlobalOptimization::~GlobalOptimization()
+DnnOptimization::~DnnOptimization()
 {
     threadOpt.detach();
 }
 
-void GlobalOptimization::GPS2XYZ(double latitude, double longitude, double altitude, double* xyz)
-{
-    if(!initGPS)
-    {
-        geoConverter.Reset(latitude, longitude, altitude);
-        initGPS = true;
-    }
-    geoConverter.Forward(latitude, longitude, altitude, xyz[0], xyz[1], xyz[2]);
-    //printf("la: %f lo: %f al: %f\n", latitude, longitude, altitude);
-    //printf("gps x: %f y: %f z: %f\n", xyz[0], xyz[1], xyz[2]);
-}
-
-void GlobalOptimization::inputOdom(double t, Eigen::Vector3d OdomP, Eigen::Quaterniond OdomQ)
+void DnnOptimization::inputOdom(double t, Eigen::Vector3d OdomP, Eigen::Quaterniond OdomQ)
 {
 	mPoseMap.lock();
     vector<double> localPose{OdomP.x(), OdomP.y(), OdomP.z(), 
@@ -34,14 +22,14 @@ void GlobalOptimization::inputOdom(double t, Eigen::Vector3d OdomP, Eigen::Quate
     localPoseMap[t] = localPose;
 
 
-    Eigen::Quaterniond globalQ;
-    globalQ = WGPS_T_WVIO.block<3, 3>(0, 0) * OdomQ;
-    Eigen::Vector3d globalP = WGPS_T_WVIO.block<3, 3>(0, 0) * OdomP + WGPS_T_WVIO.block<3, 1>(0, 3);
-    vector<double> globalPose{globalP.x(), globalP.y(), globalP.z(),
-                              globalQ.w(), globalQ.x(), globalQ.y(), globalQ.z()};
-    globalPoseMap[t] = globalPose;
-    lastP = globalP;
-    lastQ = globalQ;
+    Eigen::Quaterniond dnnQ;
+    dnnQ = WDNN_T_WVIO.block<3, 3>(0, 0) * OdomQ;
+    Eigen::Vector3d dnnP = WDNN_T_WVIO.block<3, 3>(0, 0) * OdomP + WDNN_T_WVIO.block<3, 1>(0, 3);
+    vector<double> dnnPose{dnnP.x(), dnnP.y(), dnnP.z(),
+                              dnnQ.w(), dnnQ.x(), dnnQ.y(), dnnQ.z()};
+    dnnPoseMap[t] = dnnPose;
+    lastP = dnnP;
+    lastQ = dnnQ;
 
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header.stamp = ros::Time(t);
@@ -53,38 +41,39 @@ void GlobalOptimization::inputOdom(double t, Eigen::Vector3d OdomP, Eigen::Quate
     pose_stamped.pose.orientation.y = lastQ.y();
     pose_stamped.pose.orientation.z = lastQ.z();
     pose_stamped.pose.orientation.w = lastQ.w();
-    global_path.header = pose_stamped.header;
-    global_path.poses.push_back(pose_stamped);
+    dnn_path.header = pose_stamped.header;
+    dnn_path.poses.push_back(pose_stamped);
 
     mPoseMap.unlock();
 }
 
-void GlobalOptimization::getGlobalOdom(Eigen::Vector3d &odomP, Eigen::Quaterniond &odomQ)
+void DnnOptimization::getDnnOdom(Eigen::Vector3d &odomP, Eigen::Quaterniond &odomQ)
 {
     odomP = lastP;
     odomQ = lastQ;
 }
 
-void GlobalOptimization::inputGPS(double t, double latitude, double longitude, double altitude, double posAccuracy)
+void DnnOptimization::inputDnn(double t, Eigen::Vector3d DnnP, Eigen::Quaterniond DnnQ)
 {
-	double xyz[3];
-	GPS2XYZ(latitude, longitude, altitude, xyz);
-	vector<double> tmp{xyz[0], xyz[1], xyz[2], posAccuracy};
-    //printf("new gps: t: %f x: %f y: %f z:%f \n", t, tmp[0], tmp[1], tmp[2]);
-	GPSPositionMap[t] = tmp;
-    newGPS = true;
-
+	vector<double> dnnPose{DnnP.x(), DnnP.y(), DnnP.z(),
+                              DnnQ.w(), DnnQ.x(), DnnQ.y(), DnnQ.z()};
+	dnnPositionMap[t] = dnnPose;
+    newDnn = true;
+    if (first_pair) {
+        first_t = t;
+        first_pair = false;
+    }
 }
 
-void GlobalOptimization::optimize()
+void DnnOptimization::optimize()
 {
     while(true)
     {
-        if(newGPS)
+        if(newDnn)
         {
-            newGPS = false;
-            printf("global optimization\n");
-            TicToc globalOptimizationTime;
+            newDnn = false;
+            printf("dnn optimization\n");
+            TicToc dnnOptimizationTime;
 
             ceres::Problem problem;
             ceres::Solver::Options options;
@@ -104,7 +93,7 @@ void GlobalOptimization::optimize()
             double t_array[length][3];
             double q_array[length][4];
             map<double, vector<double>>::iterator iter;
-            iter = globalPoseMap.begin();
+            iter = dnnPoseMap.begin();
             for (int i = 0; i < length; i++, iter++)
             {
                 t_array[i][0] = iter->second[0];
@@ -118,8 +107,9 @@ void GlobalOptimization::optimize()
                 problem.AddParameterBlock(t_array[i], 3);
             }
 
-            map<double, vector<double>>::iterator iterVIO, iterVIONext, iterGPS;
+            map<double, vector<double>>::iterator iterVIO, iterVIONext, iterDnn;
             int i = 0;
+            int i_prev = 0;
             for (iterVIO = localPoseMap.begin(); iterVIO != localPoseMap.end(); iterVIO++, i++)
             {
                 //vio factor
@@ -173,15 +163,22 @@ void GlobalOptimization::optimize()
                     */
 
                 }
-                //gps factor
+                //dnn factor
                 double t = iterVIO->first;
-                iterGPS = GPSPositionMap.find(t);
-                if (iterGPS != GPSPositionMap.end())
+                iterDnn = dnnPositionMap.find(t);
+                if (iterDnn != dnnPositionMap.end())
                 {
-                    ceres::CostFunction* gps_function = TError::Create(iterGPS->second[0], iterGPS->second[1], 
-                                                                       iterGPS->second[2], iterGPS->second[3]);
-                    //printf("inverse weight %f \n", iterGPS->second[3]);
-                    problem.AddResidualBlock(gps_function, loss_function, t_array[i]);
+                    if (t == first_t) {
+                        i_prev = i;
+                    }
+                    else {
+                        ceres::CostFunction* dnn_function = RelativeRTError::Create(iterDnn->second[0], iterDnn->second[1], iterDnn->second[2],
+                                                                                    iterDnn->second[3], iterDnn->second[4], iterDnn->second[5], iterDnn->second[6],
+                                                                                    0.1, 0.01);
+                        //printf("inverse weight %f \n", iterGPS->second[3]);
+                        problem.AddResidualBlock(dnn_function, NULL, q_array[i_prev], t_array[i_prev], q_array[i], t_array[i]);
+                        i_prev = i;
+                    }
 
                     /*
                     double **para = new double *[1];
@@ -204,30 +201,30 @@ void GlobalOptimization::optimize()
             ceres::Solve(options, &problem, &summary);
             //std::cout << summary.BriefReport() << "\n";
 
-            // update global pose
+            // update dnn pose
             //mPoseMap.lock();
-            iter = globalPoseMap.begin();
+            iter = dnnPoseMap.begin();
             for (int i = 0; i < length; i++, iter++)
             {
-            	vector<double> globalPose{t_array[i][0], t_array[i][1], t_array[i][2],
+            	vector<double> dnnPose{t_array[i][0], t_array[i][1], t_array[i][2],
             							  q_array[i][0], q_array[i][1], q_array[i][2], q_array[i][3]};
-            	iter->second = globalPose;
+            	iter->second = dnnPose;
             	if(i == length - 1)
             	{
             	    Eigen::Matrix4d WVIO_T_body = Eigen::Matrix4d::Identity(); 
-            	    Eigen::Matrix4d WGPS_T_body = Eigen::Matrix4d::Identity();
+            	    Eigen::Matrix4d WDNN_T_body = Eigen::Matrix4d::Identity();
             	    double t = iter->first;
             	    WVIO_T_body.block<3, 3>(0, 0) = Eigen::Quaterniond(localPoseMap[t][3], localPoseMap[t][4], 
             	                                                       localPoseMap[t][5], localPoseMap[t][6]).toRotationMatrix();
             	    WVIO_T_body.block<3, 1>(0, 3) = Eigen::Vector3d(localPoseMap[t][0], localPoseMap[t][1], localPoseMap[t][2]);
-            	    WGPS_T_body.block<3, 3>(0, 0) = Eigen::Quaterniond(globalPose[3], globalPose[4], 
-            	                                                        globalPose[5], globalPose[6]).toRotationMatrix();
-            	    WGPS_T_body.block<3, 1>(0, 3) = Eigen::Vector3d(globalPose[0], globalPose[1], globalPose[2]);
-            	    WGPS_T_WVIO = WGPS_T_body * WVIO_T_body.inverse();
+            	    WDNN_T_body.block<3, 3>(0, 0) = Eigen::Quaterniond(dnnPose[3], dnnPose[4], 
+            	                                                        dnnPose[5], dnnPose[6]).toRotationMatrix();
+            	    WDNN_T_body.block<3, 1>(0, 3) = Eigen::Vector3d(dnnPose[0], dnnPose[1], dnnPose[2]);
+            	    WDNN_T_WVIO = WDNN_T_body * WVIO_T_body.inverse();
             	}
             }
-            updateGlobalPath();
-            printf("global time %f \n", globalOptimizationTime.toc());
+            updateDnnPath();
+            printf("dnn time %f \n", dnnOptimizationTime.toc());
             mPoseMap.unlock();
         }
         std::chrono::milliseconds dura(2000);
@@ -237,11 +234,11 @@ void GlobalOptimization::optimize()
 }
 
 
-void GlobalOptimization::updateGlobalPath()
+void DnnOptimization::updateDnnPath()
 {
-    global_path.poses.clear();
+    dnn_path.poses.clear();
     map<double, vector<double>>::iterator iter;
-    for (iter = globalPoseMap.begin(); iter != globalPoseMap.end(); iter++)
+    for (iter = dnnPoseMap.begin(); iter != dnnPoseMap.end(); iter++)
     {
         geometry_msgs::PoseStamped pose_stamped;
         pose_stamped.header.stamp = ros::Time(iter->first);
@@ -253,6 +250,6 @@ void GlobalOptimization::updateGlobalPath()
         pose_stamped.pose.orientation.x = iter->second[4];
         pose_stamped.pose.orientation.y = iter->second[5];
         pose_stamped.pose.orientation.z = iter->second[6];
-        global_path.poses.push_back(pose_stamped);
+        dnn_path.poses.push_back(pose_stamped);
     }
 }

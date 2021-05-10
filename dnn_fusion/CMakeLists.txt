@@ -26,7 +26,7 @@ include_directories(
 catkin_package()
 
 add_executable(dnn_fusion_node 
-	src/dnnOptNode.cpp)
-	# src/dnnOpt.cpp)
+	src/dnnOptNode.cpp
+	src/dnnOpt.cpp)
 
 target_link_libraries(dnn_fusion_node ${OpenCV_LIBS} ${catkin_LIBRARIES} ${CERES_LIBRARIES}) 
